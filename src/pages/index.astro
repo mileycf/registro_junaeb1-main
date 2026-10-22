@@ -1,0 +1,125 @@
+---
+import Layout from '../layouts/Layout.astro';
+import { students } from '../data.js';
+---
+<Layout title="Asiste · Lista de asistencia">
+  <section class="page-intro">
+    <div>
+      <p class="eyebrow">GESTIÓN DEL CURSO <span class="eyebrow-line"></span></p>
+      <h1>Lista de <span>asistencia.</span></h1>
+      <p class="intro-copy">Registra la jornada de forma rápida y mantén todo el curso organizado en un solo lugar.</p>
+    </div>
+    <div class="date-card">
+      <span class="date-label">FECHA DE LA CLASE</span>
+      <input id="class-date" type="date" aria-label="Fecha de la clase" />
+    </div>
+  </section>
+
+  <section class="stats-grid" id="resumen" aria-label="Resumen de asistencia">
+    <article class="stat-card"><span class="stat-label">Estudiantes</span><div class="stat-bottom"><strong id="total-count">35</strong><span class="stat-symbol">◎</span></div><span class="stat-note">Lista del curso</span></article>
+    <article class="stat-card"><span class="stat-label">Presentes</span><div class="stat-bottom"><strong id="present-count">0</strong><span class="stat-symbol">✓</span></div><span class="stat-note">Presentes hoy</span></article>
+    <article class="stat-card"><span class="stat-label">Ausentes</span><div class="stat-bottom"><strong id="absent-count">0</strong><span class="stat-symbol">—</span></div><span class="stat-note">Ausencias registradas</span></article>
+    <article class="stat-card"><span class="stat-label">Atrasados</span><div class="stat-bottom"><strong id="late-count">0</strong><span class="stat-symbol">◷</span></div><span class="stat-note">Llegadas tarde</span></article>
+  </section>
+
+  <section class="attendance-panel" id="asistencia">
+    <div class="panel-heading">
+      <div><h2>Estudiantes del curso</h2><p>Marca un estado para cada estudiante.</p></div>
+      <div class="panel-actions"><button class="button button-outline" id="reset-button" type="button">Limpiar lista</button><button class="button button-dark" id="save-button" type="button">Guardar asistencia <span aria-hidden="true">↗</span></button></div>
+    </div>
+    <div class="toolbar">
+      <label class="search-box"><span aria-hidden="true">⌕</span><input id="student-search" type="search" placeholder="Buscar estudiante..." /></label>
+      <div class="filter-group" role="group" aria-label="Filtrar estudiantes">
+        <button class="filter-button active" data-filter="todos" type="button">Todos <span id="all-filter-count">35</span></button>
+        <button class="filter-button" data-filter="pendiente" type="button">Pendientes</button>
+        <button class="filter-button" data-filter="presente" type="button">Presentes</button>
+        <button class="filter-button" data-filter="ausente" type="button">Ausentes</button>
+        <button class="filter-button" data-filter="atrasado" type="button">Atrasados</button>
+      </div>
+    </div>
+    <div class="legend"><span class="legend-red"></span> Estudiante con beneficio JUNAEB <span class="legend-divider"></span> <span class="legend-neutral"></span> Sin beneficio indicado</div>
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th class="number-col">N.º</th><th>Estudiante</th><th>Beneficio</th><th>Estado de asistencia</th></tr></thead>
+        <tbody id="student-rows">
+          {students.map((student, index) => <tr data-name={`${student.first} ${student.last}`.toLowerCase()} data-junaeb={student.junaeb ? 'true' : 'false'} data-status="pendiente" class:list={{ 'junaeb-row': student.junaeb }}>
+            <td class="student-number">{String(index + 1).padStart(2, '0')}</td>
+            <td><div class="student-name">{student.first} {student.last}</div></td>
+            <td>{student.junaeb ? <span class="benefit-pill">JUNAEB</span> : <span class="no-benefit">—</span>}</td>
+            <td><div class="status-options" role="group" aria-label={`Asistencia de ${student.first} ${student.last}`}>
+              <button class="status-button present" data-status-choice="presente" type="button" aria-pressed="false"><span>✓</span> Presente</button>
+              <button class="status-button absent" data-status-choice="ausente" type="button" aria-pressed="false"><span>×</span> Ausente</button>
+              <button class="status-button late" data-status-choice="atrasado" type="button" aria-pressed="false"><span>◷</span> Atrasado</button>
+            </div></td>
+          </tr>)}
+        </tbody>
+      </table>
+      <div class="empty-state" id="empty-state" hidden>No hay estudiantes que coincidan con la búsqueda.</div>
+    </div>
+    <div class="panel-bottom"><span id="visible-count">35 estudiantes en la lista</span><span>Los cambios se guardan en este navegador al presionar “Guardar asistencia”.</span></div>
+    <p class="save-message" id="save-message" role="status" aria-live="polite"></p>
+  </section>
+  <script>
+    const rows = [...document.querySelectorAll('#student-rows tr')];
+    const search = document.querySelector('#student-search');
+    const filterButtons = [...document.querySelectorAll('[data-filter]')];
+    const dateInput = document.querySelector('#class-date');
+    const today = new Date();
+    dateInput.value = `${today.getFullYear()}-${String(today.getMonth()+1).padStart(2,'0')}-${String(today.getDate()).padStart(2,'0')}`;
+    let activeFilter = 'todos';
+    function updateCounts() {
+      const counts = { presente: 0, ausente: 0, atrasado: 0, pendiente: 0 };
+      rows.forEach(row => counts[row.dataset.status]++);
+      document.querySelector('#present-count').textContent = counts.presente;
+      document.querySelector('#absent-count').textContent = counts.ausente;
+      document.querySelector('#late-count').textContent = counts.atrasado;
+      document.querySelector('#total-count').textContent = rows.length;
+      document.querySelector('#all-filter-count').textContent = rows.length;
+      return counts;
+    }
+    function applyFilters() {
+      const term = search.value.trim().toLocaleLowerCase('es');
+      let visible = 0;
+      rows.forEach(row => {
+        const matchesName = row.dataset.name.includes(term);
+        const matchesStatus = activeFilter === 'todos' || row.dataset.status === activeFilter;
+        const show = matchesName && matchesStatus;
+        row.hidden = !show;
+        if (show) visible++;
+      });
+      document.querySelector('#visible-count').textContent = `${visible} estudiante${visible === 1 ? '' : 's'} en la lista`;
+      document.querySelector('#empty-state').hidden = visible !== 0;
+    }
+    rows.forEach(row => {
+      row.querySelectorAll('[data-status-choice]').forEach(button => button.addEventListener('click', () => {
+        const chosen = button.dataset.statusChoice;
+        row.dataset.status = chosen;
+        row.querySelectorAll('[data-status-choice]').forEach(option => {
+          const selected = option === button;
+          option.classList.toggle('selected', selected);
+          option.setAttribute('aria-pressed', String(selected));
+        });
+        updateCounts(); applyFilters();
+      }));
+    });
+    filterButtons.forEach(button => button.addEventListener('click', () => {
+      activeFilter = button.dataset.filter;
+      filterButtons.forEach(item => item.classList.toggle('active', item === button));
+      applyFilters();
+    }));
+    search.addEventListener('input', applyFilters);
+    document.querySelector('#reset-button').addEventListener('click', () => {
+      rows.forEach(row => { row.dataset.status = 'pendiente'; row.querySelectorAll('[data-status-choice]').forEach(button => { button.classList.remove('selected'); button.setAttribute('aria-pressed', 'false'); }); });
+      document.querySelector('#save-message').textContent = '';
+      updateCounts(); applyFilters();
+    });
+    document.querySelector('#save-button').addEventListener('click', () => {
+      const record = { date: dateInput.value, attendance: rows.map(row => ({ name: row.dataset.name, status: row.dataset.status, junaeb: row.dataset.junaeb === 'true' })) };
+      try {
+        localStorage.setItem(`asiste-attendance-${record.date}`, JSON.stringify(record));
+        document.querySelector('#save-message').textContent = `Asistencia del ${record.date} guardada en este navegador.`;
+      } catch { document.querySelector('#save-message').textContent = 'No se pudo guardar en este navegador.'; }
+    });
+    updateCounts(); applyFilters();
+  </script>
+</Layout>
